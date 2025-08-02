@@ -63,10 +63,10 @@ class VanillaTransformerStack(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        attention_mask: torch.Tensor | None = None,
+        affine: Affine3D,
+        affine_mask: torch.Tensor,
+        attention_mask: torch.Tensor,
         sequence_id: torch.Tensor | None = None,
-        affine: Affine3D | None = None,
-        affine_mask: torch.Tensor | None = None,
         chain_id: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
@@ -75,8 +75,8 @@ class VanillaTransformerStack(nn.Module):
         Args:
             x (torch.Tensor): The input tensor of shape (batch_size, sequence_length, d_model).
             sequence_id (torch.Tensor): The sequence ID tensor of shape (batch_size, sequence_length).
-            affine (Affine3D | None): The affine transformation tensor or None.
-            affine_mask (torch.Tensor | None): The affine mask tensor or None.
+            affine (Affine3D): The affine transformation tensor.
+            affine_mask (torch.Tensor): The affine mask tensor.
             chain_id (torch.Tensor): The protein chain tensor of shape (batch_size, sequence_length).
                 Only used in geometric attention.
 

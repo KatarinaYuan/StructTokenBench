@@ -53,7 +53,7 @@ class BaseQuantizer(nn.Module):
         return self.codebook.weight
 
     def indices2embedding(self, indices: torch.IntTensor) -> torch.Tensor:
-        z_q = self.codebook[indices]
+        z_q = self.codebook(indices)
         return z_q
     
     def forward(self, z: torch.Tensor) -> (torch.Tensor, torch.IntTensor, float):

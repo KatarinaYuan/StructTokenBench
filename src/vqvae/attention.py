@@ -23,7 +23,7 @@ class VanillaMultiHeadAttention(nn.Module):
 
         self.d_head = self.d_model // self.n_heads
         self.layernorm_qkv = nn.Sequential(
-            nn.LayerNorm(d_model), nn.Linear(d_model, d_model * 3, bias=bias)
+            nn.LayerNorm(d_model, bias=bias), nn.Linear(d_model, d_model * 3, bias=bias)
         )
         self.out_proj = nn.Linear(d_model, d_model, bias=bias)
 
