@@ -9,6 +9,7 @@ import torch.distributed as dist
 
 from dataset.base import BaseDataset
 from dataset.cath import CATHLabelMappingDataset
+from dataset.sifts import SIFTSResidueMapping
 from lxml import etree as ET
 import json
 
@@ -21,6 +22,8 @@ class InterProFunctionDataset(BaseDataset):
     IPR_ENTRY_PROTEIN_COUNT_FILE = "./interpro/interpro.xml"
     IDMAPPING_PDB2UNIPROT_FILE = "./interpro/pdbtosp.txt"
     PROCESSED_DETAILED_ENTRY_FILE = "./interpro/InterPro_parsed_r7_nofilter.tsv"
+    # https://ftp.ebi.ac.uk/pub/databases/msd/sifts/flatfiles/tsv/uniprot_segments_observed.tsv.gz
+    SIFTS_SEGMENTS_FILE = "./interpro/uniprot_segments_observed.tsv.gz"
 
     FULL_FIELD_MAPPING = {
         "conservedsite_label": "Conserved_site",
@@ -230,7 +233,12 @@ class InterProFunctionDataset(BaseDataset):
             "cnt_no_entity_key": 0
         }
         return cnt_stats
-        
+
+    def prepare_structure_loading(self):
+        # InterPro regions are UniProt positions; SIFTS places them on PDB residues
+        file = os.path.join(self.data_path, self.SIFTS_SEGMENTS_FILE)
+        self.sifts = SIFTSResidueMapping(file)
+
     def load_structure(self, idx, cnt_stats):
         """Given pdb_id, chain_id
         """
@@ -247,18 +255,25 @@ class InterProFunctionDataset(BaseDataset):
         # fragments indexed by uniprot
         fragments = self.data[idx]["fragments"]
         fragments = fragments.split("-")
-        L, R = eval(fragments[0]), eval(fragments[1])
-        # L and R are relative indices for entity_sequence
+        L, R = int(fragments[0]), int(fragments[1])
+
+        # L and R are UniProt positions, while pdb_chain.residue_index holds PDB
+        # author residue numbers, which often differ (missing initiator Met,
+        # signal peptides, construct offsets, insertion codes). Map every residue
+        # to its UniProt position through SIFTS before labelling.
+        uniprot_positions = self.sifts.uniprot_positions(
+            pdb_chain, pdb_id, chain_id, self.data[idx]["uniprot_id"])
+        if uniprot_positions is None:
+            # the chain picked through CATH is not this UniProt protein
+            cnt_stats["cnt_wrong_chain"] += 1
+            return self.NONE_RETURN_LOAD_STRUCTURE
 
         # get local labels for each residue
-        local_label = [0] * len(pdb_chain)
-        for i in range(len(pdb_chain)):
-            ri = pdb_chain.residue_index[i]
-            if ri >= L and ri <= R:
-                local_label[i] = 1
+        local_label = self.sifts.region_label(uniprot_positions, L, R)
 
-        if sum(local_label) != R - L + 1 and sum(local_label) == 0:
-            cnt_stats["cnt_wrong_chain"] += 1
+        if sum(local_label) == 0:
+            # none of the region's residues is resolved in this structure
+            cnt_stats["cnt_no_aligned_regions"] += 1
             return self.NONE_RETURN_LOAD_STRUCTURE
 
         ret = {
